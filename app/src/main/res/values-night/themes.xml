@@ -1,0 +1,3 @@
+<resources>
+    <style name="Theme.Payamak" parent="android:Theme.Material.NoActionBar" />
+</resources>
