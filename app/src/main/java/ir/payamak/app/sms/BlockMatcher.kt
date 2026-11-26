@@ -11,6 +11,7 @@ class BlockMatcher(rules: List<BlockRule>) {
             when (r.kind) {
                 RuleKind.REGEX -> C(r.kind, r.pattern, Regex(r.pattern, RegexOption.IGNORE_CASE))
                 RuleKind.BODY -> C(r.kind, normText(r.pattern), null)
+                RuleKind.BODY_REGEX -> C(r.kind, r.pattern, Regex(r.pattern, RegexOption.IGNORE_CASE))
                 else -> C(r.kind, patternCore(r.pattern), null)
             }
         } catch (e: Exception) { null }
@@ -21,18 +22,22 @@ class BlockMatcher(rules: List<BlockRule>) {
         val v = variants(address)
         val lower = address.trim().lowercase()
         val nb by lazy { normText(body) }
+        val lb by lazy { lightNorm(body) }
         return list.any { c ->
             when (c.kind) {
                 RuleKind.EXACT -> lower == c.text || v.any { it == c.text }
                 RuleKind.PREFIX -> lower.startsWith(c.text) || v.any { it.startsWith(c.text) }
                 RuleKind.REGEX -> c.regex!!.containsMatchIn(address) || v.any { c.regex.containsMatchIn(it) }
                 RuleKind.BODY -> c.text.isNotEmpty() && nb.contains(c.text)
+                RuleKind.BODY_REGEX -> c.regex!!.containsMatchIn(lb)
                 else -> false
             }
         }
     }
 
     companion object {
+        fun lightNorm(s: String) = Fa.toLatin(s).replace('ي', 'ی').replace('ك', 'ک')
+
         fun normText(s: String) = Fa.toLatin(s).replace('ي', 'ی').replace('ك', 'ک')
             .filterNot { it.isWhitespace() }.lowercase()
 

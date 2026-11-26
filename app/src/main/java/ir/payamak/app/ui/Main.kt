@@ -21,7 +21,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -45,6 +44,7 @@ import androidx.paging.cachedIn
 import ir.payamak.app.App
 import ir.payamak.app.app
 import ir.payamak.app.data.AppSettings
+import ir.payamak.app.sms.ContactNames
 import ir.payamak.app.sms.Phone
 import ir.payamak.app.sms.has
 import ir.payamak.app.sms.vmFactory
@@ -128,8 +128,8 @@ fun PermissionGate(content: @Composable () -> Unit) {
 
     if (granted) {
         val app = ctx.app
-        LaunchedEffect(Unit) { app.sync.sync() }
-        LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { app.scope.launch { app.sync.sync() } }
+        LaunchedEffect(Unit) { ContactNames.load(ctx); app.sync.sync() }
+        LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { app.scope.launch { ContactNames.load(ctx); app.sync.sync() } }
         DisposableEffect(Unit) {
             val obs = object : ContentObserver(Handler(Looper.getMainLooper())) {
                 override fun onChange(selfChange: Boolean) { app.scope.launch { app.sync.sync() } }
@@ -186,7 +186,7 @@ fun AppNav() {
 
     NavHost(nav, startDestination = "main") {
         composable("main") {
-            MainScreen(listsVm, onOpen = { k, a -> openChat(k, a) }, onSearch = { nav.navigate("search") }, onNew = { nav.navigate("new") })
+            MainScreen(listsVm, onOpen = { k, a -> openChat(k, a) }, onSearch = { nav.navigate("search") }, onNew = { nav.navigate("new") }, onReports = { nav.navigate("reports") })
         }
         composable(
             "chat/{key}?address={address}&body={body}",
@@ -204,6 +204,7 @@ fun AppNav() {
                 onForward = { text -> nav.navigate("new?body=${Uri.encode(text)}") }
             )
         }
+        composable("reports") { ReportsScreen(listsVm, onBack = { nav.popBackStack() }, onOpen = { k, a -> openChat(k, a) }) }
         composable("search") { SearchScreen(onBack = { nav.popBackStack() }, onOpen = { k, a -> openChat(k, a) }) }
         composable(newRoute, arguments = listOf(navArgument("body") { type = NavType.StringType; defaultValue = "" })) { e ->
             val body = e.arguments?.getString("body").orEmpty()
@@ -214,14 +215,13 @@ fun AppNav() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainScreen(vm: ListsVM, onOpen: (String, String) -> Unit, onSearch: () -> Unit, onNew: () -> Unit) {
+fun MainScreen(vm: ListsVM, onOpen: (String, String) -> Unit, onSearch: () -> Unit, onNew: () -> Unit, onReports: () -> Unit) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     val items = listOf(
         Triple("گفتگوها", Icons.Default.Forum, 0),
         Triple("زمان‌بندی", Icons.Default.Schedule, 1),
         Triple("مسدودی", Icons.Default.Block, 2),
-        Triple("گزارش", Icons.Default.Assessment, 3),
-        Triple("تنظیمات", Icons.Default.Settings, 4)
+        Triple("تنظیمات", Icons.Default.Settings, 3)
     )
     Scaffold(
         contentWindowInsets = NoInsets,
@@ -238,8 +238,7 @@ fun MainScreen(vm: ListsVM, onOpen: (String, String) -> Unit, onSearch: () -> Un
                 0 -> ConversationsScreen(vm, onOpen, onSearch, onNew)
                 1 -> ScheduledScreen()
                 2 -> BlocklistScreen()
-                3 -> ReportsScreen(vm, onOpen)
-                else -> SettingsScreen()
+                else -> SettingsScreen(onReports)
             }
         }
     }

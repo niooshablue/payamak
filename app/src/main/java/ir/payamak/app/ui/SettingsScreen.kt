@@ -27,7 +27,7 @@ import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen() {
+fun SettingsScreen(onReports: () -> Unit) {
     val ctx = LocalContext.current
     val app = ctx.app
     val s by app.settings.flow.collectAsState(initial = AppSettings())
@@ -37,6 +37,7 @@ fun SettingsScreen() {
     var scale by remember(s.scale) { mutableFloatStateOf(s.scale) }
     var newTpl by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
+    var checking by remember { mutableStateOf(false) }
 
     fun toast(m: String) = Toast.makeText(ctx, m, Toast.LENGTH_LONG).show()
 
@@ -66,12 +67,39 @@ fun SettingsScreen() {
                     Column(Modifier.weight(1f)) {
                         Text(if (def.isDefault) "برنامه‌ی پیش‌فرض پیامک است" else "برنامه‌ی پیش‌فرض پیامک نیست", style = MaterialTheme.typography.titleSmall)
                         Text(
-                            if (def.isDefault) "اعلان پیام‌ها، MMS، حذف واقعی و مسدودسازی کامل فعال است."
-                            else "برای MMS، اعلان، حذف واقعی و مسدودسازی کامل، پیش‌فرض کنید.",
+                            if (def.isDefault) "اعلان پیام‌ها، حذف واقعی و مسدودسازی کامل فعال است."
+                            else "برای اعلان، حذف واقعی و مسدودسازی کامل، پیش‌فرض کنید.",
                             style = MaterialTheme.typography.bodySmall
                         )
                     }
                     if (!def.isDefault) Button(onClick = def.request) { Text("پیش‌فرض‌کردن") }
+                }
+            }
+
+            OutlinedCard(onClick = onReports, modifier = Modifier.fillMaxWidth()) {
+                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Icon(Icons.Default.Assessment, null)
+                    Column(Modifier.weight(1f)) {
+                        Text("گزارش ارسال و تحویل", style = MaterialTheme.typography.titleSmall)
+                        Text("وضعیت پیامک‌های ارسالی: ارسال‌شده، تحویل‌شده، ناموفق", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Icon(Icons.Default.ChevronLeft, null)
+                }
+            }
+
+            Card {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("بررسی پیام‌های قبلی", style = MaterialTheme.typography.titleSmall)
+                    Text("همه‌ی پیامک‌های دریافتی قبلی با قانون‌های مسدودسازی تطبیق داده می‌شوند و پیام‌های تبلیغاتی به تب «مسدود شده» می‌روند.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Button(enabled = !checking, onClick = {
+                        scope.launch {
+                            checking = true
+                            val n = withContext(Dispatchers.IO) { try { app.sync.reapplyBlocking() } catch (e: Exception) { -1 } }
+                            checking = false
+                            toast(if (n < 0) "بررسی ناموفق بود" else if (n == 0) "پیام تبلیغاتی جدیدی پیدا نشد" else "${Fa.digits(n.toString())} پیام تبلیغاتی مسدود شد")
+                        }
+                    }) { Icon(Icons.Default.Shield, null); Spacer(Modifier.width(6.dp)); Text(if (checking) "در حال بررسی..." else "بررسی و مسدودکردن تبلیغات قبلی") }
+                    if (checking) LinearProgressIndicator(Modifier.fillMaxWidth())
                 }
             }
 
@@ -125,7 +153,7 @@ fun SettingsScreen() {
 
             HorizontalDivider()
             Text("پشتیبان‌گیری", style = MaterialTheme.typography.titleMedium)
-            Text("پیامک‌های متنی در یک فایل JSON ذخیره یا از آن بازیابی می‌شوند (MMS شامل نمی‌شود). بازیابی، پیام‌های تکراری را نادیده می‌گیرد.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("پیامک‌های متنی در یک فایل JSON ذخیره یا از آن بازیابی می‌شوند . بازیابی، پیام‌های تکراری را نادیده می‌گیرد.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(enabled = !busy, onClick = { exporter.launch("payamak-backup.json") }, modifier = Modifier.weight(1f)) {
                     Icon(Icons.Default.Upload, null); Spacer(Modifier.width(6.dp)); Text("ذخیره‌ی پشتیبان")
@@ -138,7 +166,7 @@ fun SettingsScreen() {
 
             HorizontalDivider()
             Text("درباره", style = MaterialTheme.typography.titleMedium)
-            Text("پیامک من نسخه‌ی ۲٫۰٫۰", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("پیامک من نسخه‌ی ۲٫۱٫۰", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

@@ -52,6 +52,7 @@ object SmsSender {
         )
         if (id < 0 && pid > 0) id = dao.idByProvider(pid) ?: -1L
         if (id < 0) throw IllegalStateException("ذخیره‌ی پیام ناموفق بود")
+        ConvIndex.refresh(app, listOf(Phone.normalize(to)))
         try {
             val sent = ArrayList<PendingIntent>(); val del = ArrayList<PendingIntent>()
             repeat(parts.size) { sent += pi(app, id, "sent"); del += pi(app, id, "delivered") }
@@ -59,6 +60,7 @@ object SmsSender {
             else mgr.sendMultipartTextMessage(to, null, parts, sent, del)
         } catch (e: Exception) {
             dao.markFailed(id)
+            ConvIndex.refresh(app, listOf(Phone.normalize(to)))
             if (pid > 0) Sys.updateSms(app, pid, 5, null)
             throw e
         }
@@ -80,7 +82,8 @@ class SmsStatusReceiver : BroadcastReceiver() {
             try {
                 val dao = app.db.smsDao()
                 val now = System.currentTimeMillis()
-                val pid = dao.get(id)?.providerId?.takeIf { it > 0 && Sys.isDefault(app) }
+                val row = dao.get(id)
+                val pid = row?.providerId?.takeIf { it > 0 && Sys.isDefault(app) }
                 if (kind == "sent") {
                     if (code == Activity.RESULT_OK) { dao.markSent(id, now); pid?.let { Sys.updateSms(app, it, 2, null) } }
                     else { dao.markFailed(id); pid?.let { Sys.updateSms(app, it, 5, null) } }
@@ -91,6 +94,7 @@ class SmsStatusReceiver : BroadcastReceiver() {
                         st >= 64 -> { dao.markDelivered(id, Status.DELIVERY_FAILED, now); pid?.let { Sys.updateSms(app, it, null, 64) } }
                     }
                 }
+                row?.let { ConvIndex.refresh(app, listOf(it.normalized)) }
             } finally { pending.finish() }
         }
     }
@@ -118,6 +122,7 @@ object Incoming {
                 type = SmsType.INBOX, read = false, status = Status.NONE, subId = sub, isBlocked = blocked
             )
         )
+        if (id > 0) ConvIndex.refresh(app, listOf(key))
         if (!blocked && id > 0) Notifier.notifyIncoming(app, address, key, body)
     }
 }
@@ -187,4 +192,9 @@ class BootReceiver : BroadcastReceiver() {
         val pending = goAsync()
         app.scope.launch { try { Scheduler.restore(app) } finally { pending.finish() } }
     }
+}
+
+/** برای واجد شرایط بودن به‌عنوان برنامه‌ی پیش‌فرض لازم است؛ MMS پشتیبانی نمی‌شود. */
+class WapPushReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {}
 }

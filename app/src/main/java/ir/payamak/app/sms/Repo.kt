@@ -13,7 +13,6 @@ import ir.payamak.app.data.SmsEntity
 import ir.payamak.app.data.SmsType
 import ir.payamak.app.data.Status
 import ir.payamak.app.data.ThreadPref
-import java.io.File
 import java.io.InputStreamReader
 import java.io.OutputStreamWriter
 
@@ -54,9 +53,6 @@ object Sys {
         try { ids.chunked(500).forEach { ctx.contentResolver.delete(Telephony.Sms.CONTENT_URI, "_id IN (${it.joinToString(",")})", null) } } catch (_: Exception) {}
     }
 
-    fun deleteMms(ctx: Context, ids: List<Long>) {
-        try { ids.chunked(500).forEach { ctx.contentResolver.delete(Telephony.Mms.CONTENT_URI, "_id IN (${it.joinToString(",")})", null) } } catch (_: Exception) {}
-    }
 }
 
 object Repo {
@@ -64,6 +60,7 @@ object Repo {
         val dao = app.db.smsDao()
         val ids = dao.unreadProviderIds(key)
         dao.markRead(key)
+        dao.clearUnread(key)
         if (ids.isNotEmpty() && Sys.isDefault(app)) Sys.markRead(app, ids)
     }
 
@@ -71,35 +68,26 @@ object Repo {
         val dao = app.db.smsDao()
         val ids = dao.allUnreadProviderIds()
         dao.markAllRead()
+        dao.clearUnreadAll()
         if (ids.isNotEmpty() && Sys.isDefault(app)) Sys.markRead(app, ids)
-    }
-
-    private fun removeFiles(uris: List<String>) {
-        uris.forEach { try { File(Uri.parse(it).path.orEmpty()).delete() } catch (_: Exception) {} }
     }
 
     private fun removeFromProvider(app: App, pids: List<Long>) {
         if (pids.isEmpty() || !Sys.isDefault(app)) return
         Sys.deleteSms(app, pids.filter { it > 0 })
-        Sys.deleteMms(app, pids.filter { it < 0 }.map { -it })
     }
 
     suspend fun deleteMessage(app: App, m: SmsEntity) {
-        val files = app.db.extraDao().attachmentsFor(m.id).map { it.uri }.filter { it.startsWith("file:") }
         m.providerId?.let { removeFromProvider(app, listOf(it)) }
-        app.db.extraDao().deleteAttachments(m.id)
         app.db.smsDao().deleteById(m.id)
-        removeFiles(files)
+        ConvIndex.refresh(app, listOf(m.normalized))
     }
 
     suspend fun deleteThread(app: App, key: String) {
         val dao = app.db.smsDao()
-        val pids = dao.providerIdsFor(key)
-        val files = dao.ownFilesFor(key)
-        removeFromProvider(app, pids)
-        dao.deleteAttachmentsOfThread(key)
+        removeFromProvider(app, dao.providerIdsFor(key))
         dao.deleteThread(key)
-        removeFiles(files)
+        dao.deleteConvAll(key)
     }
 
     suspend fun setPinned(app: App, key: String, v: Boolean) {
@@ -113,7 +101,7 @@ object Repo {
     }
 }
 
-/** پشتیبان‌گیری و بازیابی پیامک‌ها (JSON، بدون MMS). */
+/** پشتیبان‌گیری و بازیابی پیامک‌ها (JSON). */
 object Backup {
     suspend fun export(app: App, uri: Uri): Int {
         var count = 0
@@ -143,6 +131,7 @@ object Backup {
         val matcher = BlockMatcher(app.db.blockDao().enabled())
         val isDef = Sys.isDefault(app)
         var added = 0
+        val keys = HashSet<String>()
         val input = app.contentResolver.openInputStream(uri) ?: return 0
         JsonReader(InputStreamReader(input, Charsets.UTF_8)).use { r ->
             r.beginObject()
@@ -168,12 +157,13 @@ object Backup {
                             isBlocked = t == SmsType.INBOX && matcher.isBlocked(a, b)
                         )
                     )
-                    if (id > 0) added++
+                    if (id > 0) { added++; keys += n }
                 }
                 r.endArray()
             }
             r.endObject()
         }
+        ConvIndex.refresh(app, keys)
         return added
     }
 }

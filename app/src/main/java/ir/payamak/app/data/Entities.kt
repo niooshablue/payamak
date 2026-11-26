@@ -1,6 +1,5 @@
 package ir.payamak.app.data
 
-import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -15,15 +14,16 @@ object Status {
 }
 
 object SmsType { const val INBOX = 1; const val SENT = 2 }
-object RuleKind { const val EXACT = 0; const val PREFIX = 1; const val REGEX = 2; const val BODY = 3 }
+object RuleKind { const val EXACT = 0; const val PREFIX = 1; const val REGEX = 2; const val BODY = 3; const val BODY_REGEX = 4 }
 
-/** پیامک یا MMS. شناسه‌ی منفی در providerId یعنی MMS سیستم (‎-mmsId). */
+
 @Entity(
     tableName = "sms",
     indices = [
         Index(value = ["normalized", "date"]),
         Index(value = ["providerId"], unique = true),
-        Index(value = ["type", "status"])
+        Index(value = ["type", "status"]),
+        Index(value = ["normalized", "isBlocked", "date"])
     ]
 )
 data class SmsEntity(
@@ -40,22 +40,24 @@ data class SmsEntity(
     val isBlocked: Boolean = false,
     val sentAt: Long? = null,
     val deliveredAt: Long? = null,
-    val parts: Int = 1,
-    @ColumnInfo(defaultValue = "0") val isMms: Boolean = false,
-    val subject: String? = null
-)
-
-@Entity(tableName = "attachments", indices = [Index(value = ["smsId"])])
-data class Attachment(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val smsId: Long,
-    val contentType: String,
-    val uri: String,
-    val name: String = ""
+    val parts: Int = 1
 )
 
 @Entity(tableName = "thread_prefs")
 data class ThreadPref(@PrimaryKey val threadKey: String, val pinned: Boolean = false, val archived: Boolean = false)
+
+/** خلاصه‌ی هر گفتگو؛ برای نمایش سریع لیست پیام‌دهندگان (یک ردیف به ازای هر شماره و وضعیت مسدودی). */
+@Entity(tableName = "conv", primaryKeys = ["threadKey", "blocked"], indices = [Index(value = ["blocked", "lastDate"])])
+data class Conv(
+    val threadKey: String,
+    val blocked: Boolean,
+    val address: String,
+    val lastBody: String,
+    val lastDate: Long,
+    val lastType: Int,
+    val lastStatus: Int,
+    val unread: Int
+)
 
 @Entity(tableName = "templates")
 data class Template(@PrimaryKey(autoGenerate = true) val id: Long = 0, val text: String)
@@ -93,4 +95,4 @@ data class ConversationRow(
 )
 
 data class StatusCount(val status: Int, val cnt: Int)
-data class MsgLite(val id: Long, val address: String, val body: String)
+data class MsgLite(val id: Long, val address: String, val body: String, val normalized: String, val isBlocked: Boolean)

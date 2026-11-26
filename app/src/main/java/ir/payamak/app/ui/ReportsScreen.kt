@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -21,14 +22,18 @@ import ir.payamak.app.sms.Jalali
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ReportsScreen(vm: ListsVM, onOpen: (String, String) -> Unit) {
+fun ReportsScreen(vm: ListsVM, onBack: () -> Unit, onOpen: (String, String) -> Unit) {
     val items = vm.outgoing.collectAsLazyPagingItems()
     val counts by vm.statusCounts.collectAsState(initial = emptyList())
     val filter by vm.statusFilter.collectAsState()
     fun c(vararg s: Int) = counts.filter { it.status in s }.sumOf { it.cnt }
     val total = counts.sumOf { it.cnt }
 
-    Scaffold(contentWindowInsets = NoInsets, topBar = { TopAppBar(title = { Text("گزارش ارسال و تحویل") }) }) { inner ->
+    Scaffold(topBar = {
+        TopAppBar(title = { Text("گزارش ارسال و تحویل") }, navigationIcon = {
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "بازگشت") }
+        })
+    }) { inner ->
         Column(Modifier.padding(inner)) {
             LazyRow(contentPadding = PaddingValues(12.dp, 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 item { Stat("کل", total, MaterialTheme.colorScheme.secondaryContainer) }

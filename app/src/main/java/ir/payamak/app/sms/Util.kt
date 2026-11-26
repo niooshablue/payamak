@@ -106,22 +106,45 @@ object Jalali {
     }
 }
 
+/** همه‌ی مخاطبین یک‌بار در حافظه بارگذاری می‌شوند تا نمایش نام‌ها آنی باشد. */
 object ContactNames {
-    private val cache = ConcurrentHashMap<String, String>()
-    private val misses = ConcurrentHashMap.newKeySet<String>()
-    fun cached(a: String): String? = cache[a]
+    private var map: Map<String, String> = emptyMap()
+    val version = androidx.compose.runtime.mutableIntStateOf(0)
+
+    private fun key(a: String) = Fa.toLatin(a).filter { it.isDigit() }.takeLast(10)
+
+    fun cached(a: String): String? {
+        version.intValue // برای به‌روزشدن خودکار رابط
+        if (map.isEmpty() || !Phone.isReplyable(a)) return null
+        return map[key(a)]
+    }
+
+    suspend fun load(ctx: Context) {
+        if (!ctx.has(Manifest.permission.READ_CONTACTS)) return
+        val m = withContext(Dispatchers.IO) {
+            val r = HashMap<String, String>()
+            try {
+                ctx.contentResolver.query(
+                    ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                    arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER, ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME),
+                    null, null, null
+                )?.use { c ->
+                    while (c.moveToNext()) {
+                        val n = c.getString(0) ?: continue
+                        val name = c.getString(1) ?: continue
+                        r.putIfAbsent(key(n), name)
+                    }
+                }
+            } catch (_: Exception) {}
+            r
+        }
+        map = m
+        version.intValue++
+    }
 
     suspend fun lookup(ctx: Context, a: String): String? {
-        cache[a]?.let { return it }
-        if (a in misses || !ctx.has(Manifest.permission.READ_CONTACTS) || !Phone.isReplyable(a)) return null
-        return withContext(Dispatchers.IO) {
-            try {
-                val uri = Uri.withAppendedPath(ContactsContract.PhoneLookup.CONTENT_FILTER_URI, Uri.encode(a))
-                ctx.contentResolver.query(uri, arrayOf(ContactsContract.PhoneLookup.DISPLAY_NAME), null, null, null)?.use {
-                    if (it.moveToFirst()) it.getString(0)?.also { n -> cache[a] = n } else null
-                } ?: run { misses.add(a); null }
-            } catch (e: Exception) { null }
-        }
+        if (map.isEmpty()) load(ctx)
+        return cached(a)
     }
 }
 

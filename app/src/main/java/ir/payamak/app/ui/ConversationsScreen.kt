@@ -8,7 +8,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -30,10 +29,6 @@ import kotlinx.coroutines.launch
 fun ConversationsScreen(vm: ListsVM, onOpen: (String, String) -> Unit, onSearch: () -> Unit, onNew: () -> Unit) {
     val app = LocalContext.current.app
     var tab by rememberSaveable { mutableIntStateOf(0) }
-    val normal = vm.conversations.collectAsLazyPagingItems()
-    val archived = vm.archived.collectAsLazyPagingItems()
-    val blocked = vm.blocked.collectAsLazyPagingItems()
-    val items = when (tab) { 0 -> normal; 1 -> archived; else -> blocked }
     val sync by app.sync.state.collectAsState()
     var selected by remember { mutableStateOf<ConversationRow?>(null) }
     var confirmDelete by remember { mutableStateOf<ConversationRow?>(null) }
@@ -80,15 +75,18 @@ fun ConversationsScreen(vm: ListsVM, onOpen: (String, String) -> Unit, onSearch:
         Column(Modifier.padding(inner).fillMaxSize()) {
             if (tab == 0) DefaultBanner(def)
             Box(Modifier.weight(1f)) {
-                if (items.itemCount == 0 && items.loadState.refresh is LoadState.NotLoading && !sync.running) {
-                    EmptyState(
-                        when (tab) { 0 -> Icons.Default.Forum; 1 -> Icons.Default.Archive; else -> Icons.Default.Shield },
-                        when (tab) { 0 -> "هنوز پیامکی وجود ندارد"; 1 -> "گفتگوی بایگانی‌شده‌ای نیست"; else -> "پیامک مسدودشده‌ای نیست" }
-                    )
-                } else {
-                    LazyColumn(contentPadding = PaddingValues(bottom = 88.dp)) {
-                        items(count = items.itemCount, key = items.itemKey { it.threadKey }) { i ->
-                            items[i]?.let { row -> ConversationItem(row, onClick = { onOpen(row.threadKey, row.address) }, onLong = { selected = row }) }
+                key(tab) {
+                    val items = (when (tab) { 0 -> vm.conversations; 1 -> vm.archived; else -> vm.blocked }).collectAsLazyPagingItems()
+                    if (items.itemCount == 0 && items.loadState.refresh is LoadState.NotLoading && !sync.running) {
+                        EmptyState(
+                            when (tab) { 0 -> Icons.Default.Forum; 1 -> Icons.Default.Archive; else -> Icons.Default.Shield },
+                            when (tab) { 0 -> "هنوز پیامکی وجود ندارد"; 1 -> "گفتگوی بایگانی‌شده‌ای نیست"; else -> "پیامک مسدودشده‌ای نیست" }
+                        )
+                    } else {
+                        LazyColumn(contentPadding = PaddingValues(bottom = 88.dp)) {
+                            items(count = items.itemCount, key = items.itemKey { it.threadKey }) { i ->
+                                items[i]?.let { row -> ConversationItem(row, onClick = { onOpen(row.threadKey, row.address) }, onLong = { selected = row }) }
+                            }
                         }
                     }
                 }

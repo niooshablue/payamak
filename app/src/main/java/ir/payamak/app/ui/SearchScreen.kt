@@ -49,7 +49,7 @@ class SearchVM(a: App) : ViewModel() {
     }.cachedIn(viewModelScope)
 }
 
-private fun highlight(text: String, q: String, color: androidx.compose.ui.graphics.Color): AnnotatedString = buildAnnotatedString {
+fun highlight(text: String, q: String, color: androidx.compose.ui.graphics.Color): AnnotatedString = buildAnnotatedString {
     val t = q.trim()
     if (t.isEmpty()) { append(text); return@buildAnnotatedString }
     var i = 0

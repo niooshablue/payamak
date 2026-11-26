@@ -28,16 +28,46 @@ interface SmsDao {
     suspend fun get(id: Long): SmsEntity?
 
     @Query(
-        "SELECT m.normalized AS threadKey, m.address AS address, m.body AS lastBody, m.date AS lastDate, " +
-        "m.type AS lastType, m.status AS lastStatus, " +
-        "(SELECT COUNT(*) FROM sms u WHERE u.normalized = m.normalized AND u.type = 1 AND u.read = 0 AND u.isBlocked = :blocked) AS unread, " +
-        "COALESCE(p.pinned, 0) AS pinned " +
-        "FROM sms m LEFT JOIN thread_prefs p ON p.threadKey = m.normalized " +
-        "WHERE m.id = (SELECT s.id FROM sms s WHERE s.normalized = m.normalized AND s.isBlocked = :blocked " +
-        "ORDER BY s.date DESC, s.id DESC LIMIT 1) AND COALESCE(p.archived, 0) = :archived " +
-        "ORDER BY pinned DESC, m.date DESC, m.id DESC"
+        "SELECT c.threadKey AS threadKey, c.address AS address, c.lastBody AS lastBody, c.lastDate AS lastDate, " +
+        "c.lastType AS lastType, c.lastStatus AS lastStatus, c.unread AS unread, COALESCE(p.pinned, 0) AS pinned " +
+        "FROM conv c LEFT JOIN thread_prefs p ON p.threadKey = c.threadKey " +
+        "WHERE c.blocked = :blocked AND COALESCE(p.archived, 0) = :archived ORDER BY pinned DESC, c.lastDate DESC"
     )
     fun conversations(blocked: Boolean, archived: Boolean): PagingSource<Int, ConversationRow>
+
+    @Query("SELECT * FROM sms WHERE normalized = :key AND body LIKE '%' || :q || '%' ESCAPE '\\' ORDER BY date DESC, id DESC")
+    fun searchThread(key: String, q: String): PagingSource<Int, SmsEntity>
+
+    // --- نگه‌داری جدول خلاصه‌ی گفتگوها ---
+    @Query("SELECT * FROM sms WHERE normalized = :k AND isBlocked = :b ORDER BY date DESC, id DESC LIMIT 1")
+    suspend fun lastOf(k: String, b: Boolean): SmsEntity?
+
+    @Query("SELECT COUNT(*) FROM sms WHERE normalized = :k AND isBlocked = :b AND type = 1 AND read = 0")
+    suspend fun unreadCount(k: String, b: Boolean): Int
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertConv(c: Conv)
+
+    @Query("DELETE FROM conv WHERE threadKey = :k AND blocked = :b")
+    suspend fun deleteConv(k: String, b: Boolean)
+
+    @Query("DELETE FROM conv WHERE threadKey = :k")
+    suspend fun deleteConvAll(k: String)
+
+    @Query("SELECT COUNT(*) FROM conv")
+    suspend fun convCount(): Int
+
+    @Query("SELECT DISTINCT normalized FROM sms")
+    suspend fun allKeys(): List<String>
+
+    @Query("DELETE FROM conv WHERE threadKey NOT IN (SELECT normalized FROM sms)")
+    suspend fun deleteOrphanConv()
+
+    @Query("UPDATE conv SET unread = 0 WHERE threadKey = :k")
+    suspend fun clearUnread(k: String)
+
+    @Query("UPDATE conv SET unread = 0")
+    suspend fun clearUnreadAll()
 
     @Query("SELECT * FROM sms WHERE normalized = :key ORDER BY date DESC, id DESC")
     fun thread(key: String): PagingSource<Int, SmsEntity>
@@ -81,25 +111,19 @@ interface SmsDao {
     @Query("SELECT providerId FROM sms WHERE normalized = :key AND providerId IS NOT NULL")
     suspend fun providerIdsFor(key: String): List<Long>
 
-    @Query("SELECT uri FROM attachments WHERE smsId IN (SELECT id FROM sms WHERE normalized = :key) AND uri LIKE 'file:%'")
-    suspend fun ownFilesFor(key: String): List<String>
-
-    @Query("DELETE FROM attachments WHERE smsId IN (SELECT id FROM sms WHERE normalized = :key)")
-    suspend fun deleteAttachmentsOfThread(key: String)
-
     @Query("DELETE FROM sms WHERE normalized = :key")
     suspend fun deleteThread(key: String)
 
     @Query("DELETE FROM sms WHERE id = :id")
     suspend fun deleteById(id: Long)
 
-    @Query("SELECT id, address, body FROM sms WHERE type = 1 AND id > :after ORDER BY id LIMIT :limit")
+    @Query("SELECT id, address, body, normalized, isBlocked FROM sms WHERE type = 1 AND id > :after ORDER BY id LIMIT :limit")
     suspend fun incomingChunk(after: Long, limit: Int): List<MsgLite>
 
     @Query("UPDATE sms SET isBlocked = :b WHERE id IN (:ids)")
     suspend fun setBlocked(ids: List<Long>, b: Boolean)
 
-    @Query("SELECT * FROM sms WHERE isMms = 0 AND type IN (1, 2) AND id > :after ORDER BY id LIMIT :limit")
+    @Query("SELECT * FROM sms WHERE type IN (1, 2) AND id > :after ORDER BY id LIMIT :limit")
     suspend fun backupChunk(after: Long, limit: Int): List<SmsEntity>
 
     @Query("SELECT COUNT(*) FROM sms WHERE normalized = :n AND date = :d AND type = :t AND body = :b")
@@ -108,14 +132,6 @@ interface SmsDao {
 
 @Dao
 interface ExtraDao {
-    @Query("SELECT * FROM attachments WHERE smsId = :id")
-    suspend fun attachmentsFor(id: Long): List<Attachment>
-
-    @Insert suspend fun insertAttachments(list: List<Attachment>)
-
-    @Query("DELETE FROM attachments WHERE smsId = :id")
-    suspend fun deleteAttachments(id: Long)
-
     @Query("SELECT * FROM thread_prefs WHERE threadKey = :key")
     fun prefFlow(key: String): Flow<ThreadPref?>
 
@@ -192,9 +208,26 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
     }
 }
 
+val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("DELETE FROM sms WHERE isMms = 1")
+        db.execSQL("CREATE TABLE IF NOT EXISTS `sms_new` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `providerId` INTEGER, `address` TEXT NOT NULL, `normalized` TEXT NOT NULL, `body` TEXT NOT NULL, `date` INTEGER NOT NULL, `type` INTEGER NOT NULL, `read` INTEGER NOT NULL, `status` INTEGER NOT NULL, `subId` INTEGER NOT NULL, `isBlocked` INTEGER NOT NULL, `sentAt` INTEGER, `deliveredAt` INTEGER, `parts` INTEGER NOT NULL)")
+        db.execSQL("INSERT INTO sms_new (id, providerId, address, normalized, body, date, type, read, status, subId, isBlocked, sentAt, deliveredAt, parts) SELECT id, providerId, address, normalized, body, date, type, read, status, subId, isBlocked, sentAt, deliveredAt, parts FROM sms")
+        db.execSQL("DROP TABLE sms")
+        db.execSQL("ALTER TABLE sms_new RENAME TO sms")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_sms_normalized_date` ON `sms` (`normalized`, `date`)")
+        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_sms_providerId` ON `sms` (`providerId`)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_sms_type_status` ON `sms` (`type`, `status`)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_sms_normalized_isBlocked_date` ON `sms` (`normalized`, `isBlocked`, `date`)")
+        db.execSQL("DROP TABLE IF EXISTS `attachments`")
+        db.execSQL("CREATE TABLE IF NOT EXISTS `conv` (`threadKey` TEXT NOT NULL, `blocked` INTEGER NOT NULL, `address` TEXT NOT NULL, `lastBody` TEXT NOT NULL, `lastDate` INTEGER NOT NULL, `lastType` INTEGER NOT NULL, `lastStatus` INTEGER NOT NULL, `unread` INTEGER NOT NULL, PRIMARY KEY(`threadKey`, `blocked`))")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_conv_blocked_lastDate` ON `conv` (`blocked`, `lastDate`)")
+    }
+}
+
 @Database(
-    entities = [SmsEntity::class, Attachment::class, ThreadPref::class, Template::class, BlockRule::class, ScheduledSms::class],
-    version = 2, exportSchema = false
+    entities = [SmsEntity::class, Conv::class, ThreadPref::class, Template::class, BlockRule::class, ScheduledSms::class],
+    version = 3, exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun smsDao(): SmsDao

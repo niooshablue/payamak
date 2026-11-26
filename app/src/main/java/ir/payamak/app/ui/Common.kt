@@ -11,7 +11,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
@@ -25,11 +24,8 @@ val NoInsets = WindowInsets(0, 0, 0, 0)
 
 @Composable
 fun rememberContactName(address: String): String {
-    val ctx = LocalContext.current
-    val name by produceState<String?>(initialValue = ContactNames.cached(address), address) {
-        value = ContactNames.lookup(ctx, address)
-    }
-    return name ?: address
+    val v = ContactNames.version.intValue
+    return remember(address, v) { ContactNames.cached(address) ?: address }
 }
 
 @Composable
@@ -92,33 +88,6 @@ fun SimChooser(sims: List<SimInfo>, selected: Int, onSelect: (Int) -> Unit) {
 
 // ---------------------- تصویر و نقش پیش‌فرض ----------------------
 
-private fun decodeUri(ctx: android.content.Context, uri: String, maxPx: Int): androidx.compose.ui.graphics.ImageBitmap? = try {
-    val u = android.net.Uri.parse(uri)
-    val o = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
-    ctx.contentResolver.openInputStream(u)?.use { android.graphics.BitmapFactory.decodeStream(it, null, o) }
-    var s = 1
-    while (maxOf(o.outWidth, o.outHeight) / s > maxPx * 2) s *= 2
-    ctx.contentResolver.openInputStream(u)?.use {
-        android.graphics.BitmapFactory.decodeStream(it, null, android.graphics.BitmapFactory.Options().apply { inSampleSize = s })
-    }?.asImageBitmap()
-} catch (e: Exception) { null }
-
-@Composable
-fun UriImage(
-    uri: String, modifier: Modifier, maxPx: Int = 600,
-    contentScale: androidx.compose.ui.layout.ContentScale = androidx.compose.ui.layout.ContentScale.Crop
-) {
-    val ctx = LocalContext.current
-    val bmp by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, uri) {
-        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { decodeUri(ctx, uri, maxPx) }
-    }
-    val b = bmp
-    if (b != null) androidx.compose.foundation.Image(b, null, modifier, contentScale = contentScale)
-    else Box(modifier.background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
-        Icon(Icons.Default.Image, null, tint = MaterialTheme.colorScheme.outline)
-    }
-}
-
 class DefaultState(val isDefault: Boolean, val request: () -> Unit)
 
 @Composable
@@ -148,7 +117,7 @@ fun DefaultBanner(state: DefaultState, modifier: Modifier = Modifier) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("برنامه‌ی پیش‌فرض پیامک نیستید", style = MaterialTheme.typography.titleSmall)
             Text(
-                "برای دریافت MMS، ارسال تصویر، اعلان پیام‌ها، مسدودسازی واقعی تبلیغات و حذف واقعی پیامک‌ها، این برنامه را پیش‌فرض کنید.",
+                "برای اعلان پیام‌ها، مسدودسازی واقعی تبلیغات و حذف واقعی پیامک‌ها، این برنامه را پیش‌فرض کنید.",
                 style = MaterialTheme.typography.bodySmall
             )
             Button(onClick = state.request) { Text("تنظیم به‌عنوان پیش‌فرض") }

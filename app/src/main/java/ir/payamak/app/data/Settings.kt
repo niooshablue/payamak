@@ -41,3 +41,22 @@ object DefaultRules {
         BlockRule(pattern = "برای لغو", kind = RuleKind.BODY, enabled = false, note = "عبارت «برای لغو …» (پیش‌فرض غیرفعال)", isDefault = true)
     )
 }
+
+
+/** نمونه الگوهای آماده برای مسدودسازی تبلیغات (با یک ضربه به فهرست اضافه می‌شوند). */
+object RuleSamples {
+    val all = listOf(
+        BlockRule(pattern = "^(\\+?98|0098|0)?(2000|3000|5000|9000)\\d{3,}$", kind = RuleKind.REGEX, note = "همه‌ی خطوط ۲۰۰۰/۳۰۰۰/۵۰۰۰/۹۰۰۰ در هر قالب نوشتن (۰۹۸، +۹۸، ۹۸)"),
+        BlockRule(pattern = "3000", kind = RuleKind.PREFIX, note = "شماره‌های شروع‌شونده با ۳۰۰۰ (تبلیغاتی)"),
+        BlockRule(pattern = "2000", kind = RuleKind.PREFIX, note = "شماره‌های شروع‌شونده با ۲۰۰۰"),
+        BlockRule(pattern = "5000", kind = RuleKind.PREFIX, note = "شماره‌های شروع‌شونده با ۵۰۰۰"),
+        BlockRule(pattern = "9000", kind = RuleKind.PREFIX, note = "شماره‌های شروع‌شونده با ۹۰۰۰"),
+        BlockRule(pattern = "^[A-Za-z][A-Za-z0-9 ._-]{2,}$", kind = RuleKind.REGEX, note = "فرستنده‌های متنی (نام برند). احتیاط: خدمات لاتین‌نام را هم می‌گیرد"),
+        BlockRule(pattern = "^\\d{5,8}$", kind = RuleKind.REGEX, note = "هر سرشماره‌ی کوتاه ۵ تا ۸ رقمی. احتیاط: پیامک بانک‌ها را هم می‌گیرد"),
+        BlockRule(pattern = "لغو\\s*(11|10)", kind = RuleKind.BODY_REGEX, note = "عبارت «لغو ۱۱» یا «لغو۱۱» (ارقام فارسی هم پوشش داده می‌شود)"),
+        BlockRule(pattern = "لغو تبلیغات", kind = RuleKind.BODY, note = "عبارت پایان پیامک‌های تبلیغاتی"),
+        BlockRule(pattern = "(تخفیف|حراج|فروش\\s*ویژه|جشنواره|قرعه\\s*کشی|برنده\\s*شدید)", kind = RuleKind.BODY_REGEX, note = "کلمات تبلیغاتی رایج در متن"),
+        BlockRule(pattern = "(bit\\.ly|tinyurl|cutt\\.ly|t\\.me/|ble\\.ir/join|eitaa\\.com/join)", kind = RuleKind.BODY_REGEX, note = "لینک کوتاه و دعوت به کانال/گروه"),
+        BlockRule(pattern = "https?://\\S+", kind = RuleKind.BODY_REGEX, note = "هر پیام دارای لینک (شدید؛ ممکن است پیام‌های مهم را هم بگیرد)")
+    )
+}
