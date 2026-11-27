@@ -100,10 +100,10 @@ fun ChatScreen(key: String, address: String, initialBody: String, onBack: () -> 
     val def = rememberDefaultState()
     val settings by app.settings.flow.collectAsState(initial = AppSettings())
     val blockRules by app.db.blockDao().all().collectAsState(initial = emptyList())
+    var addr by remember { mutableStateOf(address) }
     val exactBlock = blockRules.firstOrNull { it.kind == RuleKind.EXACT && Phone.normalize(it.pattern) == Phone.normalize(addr) }
     val q by vm.query.collectAsState()
 
-    var addr by remember { mutableStateOf(address) }
     LaunchedEffect(key) { if (addr.isBlank()) addr = app.db.smsDao().addressFor(key) ?: key }
     val name = rememberContactName(addr)
     val canReply = Phone.isReplyable(addr)
