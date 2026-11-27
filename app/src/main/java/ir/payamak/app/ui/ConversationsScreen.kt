@@ -18,7 +18,8 @@ import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
 import ir.payamak.app.app
-import ir.payamak.app.data.AppSettings\nimport ir.payamak.app.data.ConversationRow
+import ir.payamak.app.data.AppSettings
+import ir.payamak.app.data.ConversationRow
 import ir.payamak.app.data.SmsType
 import ir.payamak.app.sms.Fa
 import ir.payamak.app.sms.Jalali
@@ -147,7 +148,8 @@ fun ConversationItem(row: ConversationRow, onClick: () -> Unit, onLong: () -> Un
                     Text("شما: ", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodyMedium)
                 }
                 Text(
-                    row.lastBody.replace('\n', ' ').ifBlank { "📷 پیام چندرسانه‌ای" }, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    row.lastBody.replace('
+', ' ').ifBlank { "📷 پیام چندرسانه‌ای" }, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium
                 )
             }

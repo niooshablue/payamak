@@ -37,7 +37,8 @@ fun SettingsScreen(onReports: () -> Unit, onBlocklist: () -> Unit) {
     var scale by remember(s.scale) { mutableFloatStateOf(s.scale) }
     var newTpl by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
-    var checking by remember { mutableStateOf(false) }\n    var templatesOpen by remember { mutableStateOf(false) }
+    var checking by remember { mutableStateOf(false) }
+    var templatesOpen by remember { mutableStateOf(false) }
 
     fun toast(m: String) = Toast.makeText(ctx, m, Toast.LENGTH_LONG).show()
 
