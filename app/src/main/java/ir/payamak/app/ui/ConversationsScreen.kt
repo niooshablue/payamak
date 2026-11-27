@@ -148,8 +148,7 @@ fun ConversationItem(row: ConversationRow, onClick: () -> Unit, onLong: () -> Un
                     Text("شما: ", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodyMedium)
                 }
                 Text(
-                    row.lastBody.replace('
-', ' ').ifBlank { "📷 پیام چندرسانه‌ای" }, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    row.lastBody.replace('\n', ' ').ifBlank { "📷 پیام چندرسانه‌ای" }, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium
                 )
             }
