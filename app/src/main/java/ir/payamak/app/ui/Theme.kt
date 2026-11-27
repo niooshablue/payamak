@@ -64,11 +64,20 @@ private val DarkColors = darkColorScheme(
 fun PayamakTheme(settings: AppSettings, content: @Composable () -> Unit) {
     val dark = when (settings.theme) { 1 -> false; 2 -> true; else -> isSystemInDarkTheme() }
     val ctx = LocalContext.current
-    val colors = when {
-        Build.VERSION.SDK_INT >= 31 -> if (dark) dynamicDarkColorScheme(ctx) else dynamicLightColorScheme(ctx)
-        dark -> DarkColors
-        else -> LightColors
+    val preset = when (settings.design) {
+        0 -> if (dark) DarkColors else LightColors
+        1 -> if (dark) darkColorScheme(primary = Color(0xFF8AA9FF), secondary = Color(0xFFB8C7F5)) else lightColorScheme(primary = Color(0xFF245BDB), secondary = Color(0xFF526AA8))
+        2 -> if (dark) darkColorScheme(primary = Color(0xFF9CCBFF), secondary = Color(0xFFB8C9DA)) else lightColorScheme(primary = Color(0xFF1677C8), secondary = Color(0xFF526779))
+        3 -> if (dark) darkColorScheme(primary = Color(0xFF65D6C0), secondary = Color(0xFFB2CCC5)) else lightColorScheme(primary = Color(0xFF008F78), secondary = Color(0xFF4A6860))
+        4 -> if (dark) darkColorScheme(primary = Color(0xFFFFB1C8), secondary = Color(0xFFE5B8C8)) else lightColorScheme(primary = Color(0xFFB43D70), secondary = Color(0xFF78536A))
+        else -> if (dark) darkColorScheme(primary = Color(0xFFFFC477), secondary = Color(0xFFD8C1A2)) else lightColorScheme(primary = Color(0xFF9A5B12), secondary = Color(0xFF765B3D))
     }
+    val colors = preset.copy(
+        primary = settings.primaryColor.takeIf { it != 0L }?.let(::Color) ?: preset.primary,
+        background = settings.backgroundColor.takeIf { it != 0L }?.let(::Color) ?: preset.background,
+        surface = settings.cardColor.takeIf { it != 0L }?.let(::Color) ?: preset.surface,
+        onSurface = settings.textColor.takeIf { it != 0L }?.let(::Color) ?: preset.onSurface
+    )
     val family = (FontOptions.firstOrNull { it.id == settings.font } ?: FontOptions[0]).family
     MaterialTheme(colorScheme = colors, typography = scaled(family, settings.scale), content = content)
 }

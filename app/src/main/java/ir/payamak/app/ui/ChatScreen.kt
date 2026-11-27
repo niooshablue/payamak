@@ -98,6 +98,9 @@ fun ChatScreen(key: String, address: String, initialBody: String, onBack: () -> 
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val def = rememberDefaultState()
+    val settings by app.settings.flow.collectAsState(initial = AppSettings())
+    val blockRules by app.db.blockDao().all().collectAsState(initial = emptyList())
+    val exactBlock = blockRules.firstOrNull { it.kind == RuleKind.EXACT && Phone.normalize(it.pattern) == Phone.normalize(addr) }
     val q by vm.query.collectAsState()
 
     var addr by remember { mutableStateOf(address) }
@@ -119,6 +122,8 @@ fun ChatScreen(key: String, address: String, initialBody: String, onBack: () -> 
     var actionMsg by remember { mutableStateOf<SmsEntity?>(null) }
     var detailMsg by remember { mutableStateOf<SmsEntity?>(null) }
     var confirmDelete by remember { mutableStateOf(false) }
+    var pendingSend by remember { mutableStateOf<String?>(null) }
+    var countdown by remember { mutableIntStateOf(5) }
 
     val newestId = if (items.itemCount > 0) items.peek(0)?.id else null
     LaunchedEffect(newestId) {
@@ -128,12 +133,24 @@ fun ChatScreen(key: String, address: String, initialBody: String, onBack: () -> 
         }
     }
 
+    fun sendNow(body: String) {
+        if (!ctx.has(Manifest.permission.SEND_SMS)) { toast(ctx, "دسترسی ارسال پیامک داده نشده است"); return }
+        app.scope.launch { try { SmsSender.send(app, addr, body, sub) } catch (e: Exception) { toast(ctx, "ارسال پیامک ناموفق بود") } }
+    }
     fun doSend() {
         val body = text.trim()
         if (body.isEmpty() || !canReply) return
-        if (!ctx.has(Manifest.permission.SEND_SMS)) { toast(ctx, "دسترسی ارسال پیامک داده نشده است"); return }
         text = ""
-        app.scope.launch { try { SmsSender.send(app, addr, body, sub) } catch (e: Exception) { /* وضعیت «ناموفق» ثبت شده */ } }
+        if (settings.delayedSend) { pendingSend = body; countdown = 5 }
+        else sendNow(body)
+    }
+    LaunchedEffect(pendingSend) {
+        if (pendingSend != null) {
+            for (n in 5 downTo 1) { countdown = n; delay(1000) }
+            val ready = pendingSend
+            pendingSend = null
+            if (ready != null) sendNow(ready)
+        }
     }
 
     Scaffold(
@@ -159,6 +176,9 @@ fun ChatScreen(key: String, address: String, initialBody: String, onBack: () -> 
                     if (searching) {
                         if (q.isNotEmpty()) IconButton(onClick = { vm.query.value = "" }) { Icon(Icons.Default.Close, "پاک‌کردن") }
                     } else {
+                        if (canReply && !addr.matches(Regex("^[A-Za-z].*"))) IconButton(onClick = {
+                            runCatching { ctx.startActivity(Intent(Intent.ACTION_DIAL, android.net.Uri.parse("tel:$addr"))) }
+                        }) { Icon(Icons.Default.Call, "تماس با مخاطب") }
                         IconButton(onClick = { searching = true }) { Icon(Icons.Default.Search, "جستجو در این گفتگو") }
                         IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, "بیشتر") }
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
@@ -166,13 +186,14 @@ fun ChatScreen(key: String, address: String, initialBody: String, onBack: () -> 
                             if (unknownNumber) DropdownMenuItem(text = { Text("افزودن به مخاطبین") }, onClick = { menu = false; addToContacts(ctx, addr) })
                             DropdownMenuItem(text = { Text(if (pinned) "برداشتن سنجاق" else "سنجاق‌کردن") }, onClick = { menu = false; scope.launch { Repo.setPinned(app, key, !pinned) } })
                             DropdownMenuItem(text = { Text(if (arch) "خروج از بایگانی" else "بایگانی") }, onClick = { menu = false; scope.launch { Repo.setArchived(app, key, !arch) } })
-                            DropdownMenuItem(text = { Text("مسدودکردن این شماره") }, onClick = {
+                            DropdownMenuItem(text = { Text(if (exactBlock != null) "خارج‌کردن از فهرست مسدودها" else "مسدودکردن این شماره") }, onClick = {
                                 menu = false
                                 app.scope.launch {
-                                    app.db.blockDao().insert(BlockRule(pattern = addr, kind = RuleKind.EXACT, note = "مسدود‌شده از داخل گفتگو"))
+                                    if (exactBlock != null) app.db.blockDao().delete(exactBlock)
+                                    else app.db.blockDao().insert(BlockRule(pattern = addr, kind = RuleKind.EXACT, note = "مسدود‌شده از داخل گفتگو"))
                                     app.sync.reapplyBlocking()
                                 }
-                                toast(ctx, "شماره مسدود شد")
+                                toast(ctx, if (exactBlock != null) "شماره از مسدودی خارج شد" else "شماره مسدود شد")
                             })
                             DropdownMenuItem(text = { Text("حذف گفتگو") }, onClick = { menu = false; confirmDelete = true })
                         }
@@ -182,6 +203,15 @@ fun ChatScreen(key: String, address: String, initialBody: String, onBack: () -> 
         }
     ) { inner ->
         Column(Modifier.padding(inner).fillMaxSize().imePadding()) {
+            if (pendingSend != null) {
+                Surface(color = MaterialTheme.colorScheme.tertiaryContainer, modifier = Modifier.fillMaxWidth()) {
+                    Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("ارسال تا ${Fa.digits(countdown.toString())} ثانیه دیگر", Modifier.weight(1f))
+                        TextButton(onClick = { text = pendingSend.orEmpty(); pendingSend = null }) { Text("ویرایش") }
+                        TextButton(onClick = { pendingSend = null }) { Text("لغو") }
+                    }
+                }
+            }
             Box(Modifier.weight(1f)) {
                 if (searching && q.isNotBlank() && items.itemCount == 0) EmptyState(Icons.Default.SearchOff, "نتیجه‌ای پیدا نشد")
                 LazyColumn(Modifier.fillMaxSize(), state = listState, reverseLayout = true, contentPadding = PaddingValues(vertical = 8.dp)) {
@@ -222,7 +252,7 @@ fun ChatScreen(key: String, address: String, initialBody: String, onBack: () -> 
                             }
                             OutlinedTextField(
                                 value = text, onValueChange = { text = it }, modifier = Modifier.weight(1f),
-                                placeholder = { Text("پیامک...") }, maxLines = 5, shape = RoundedCornerShape(24.dp)
+                                placeholder = { Text("پیامک...") }, minLines = 2, maxLines = 6, shape = RoundedCornerShape(24.dp)
                             )
                             IconButton(onClick = { showSchedule = true }) { Icon(Icons.Default.AlarmAdd, "ارسال زمان‌دار") }
                             FilledIconButton(onClick = ::doSend, enabled = text.isNotBlank()) { Icon(Icons.AutoMirrored.Filled.Send, "ارسال") }

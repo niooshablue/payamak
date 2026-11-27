@@ -39,7 +39,7 @@ private fun kindHint(k: Int) = when (k) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun BlocklistScreen() {
+fun BlocklistScreen(onBack: (() -> Unit)? = null) {
     val ctx = LocalContext.current
     val app = ctx.app
     val rules by app.db.blockDao().all().collectAsState(initial = emptyList())
@@ -55,7 +55,9 @@ fun BlocklistScreen() {
     Scaffold(
         contentWindowInsets = NoInsets,
         topBar = {
-            TopAppBar(title = { Text("مسدودسازی تبلیغات") }, actions = {
+            TopAppBar(title = { Text("مسدودسازی تبلیغات") }, navigationIcon = {
+                if (onBack != null) IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "بازگشت") }
+            }, actions = {
                 IconButton(onClick = { samples = true }) { Icon(Icons.Default.Lightbulb, "نمونه الگوها") }
                 IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, "بیشتر") }
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {

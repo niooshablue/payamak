@@ -18,7 +18,7 @@ import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
 import ir.payamak.app.app
-import ir.payamak.app.data.ConversationRow
+import ir.payamak.app.data.AppSettings\nimport ir.payamak.app.data.ConversationRow
 import ir.payamak.app.data.SmsType
 import ir.payamak.app.sms.Fa
 import ir.payamak.app.sms.Jalali
@@ -31,6 +31,9 @@ fun ConversationsScreen(vm: ListsVM, onOpen: (String, String) -> Unit, onSearch:
     val app = LocalContext.current.app
     var tab by rememberSaveable { mutableIntStateOf(0) }
     val sync by app.sync.state.collectAsState()
+    val settings by app.settings.flow.collectAsState(initial = AppSettings())
+    val visibleTabs = buildList { add(0 to "گفتگوها"); if (settings.showArchiveTab) add(1 to "بایگانی"); if (settings.showBlockedTab) add(2 to "مسدود شده") }
+    LaunchedEffect(settings.showArchiveTab, settings.showBlockedTab) { if (visibleTabs.none { it.first == tab }) tab = 0 }
     var selected by remember { mutableStateOf<ConversationRow?>(null) }
     var confirmDelete by remember { mutableStateOf<ConversationRow?>(null) }
     var menu by remember { mutableStateOf(false) }
@@ -53,10 +56,8 @@ fun ConversationsScreen(vm: ListsVM, onOpen: (String, String) -> Unit, onSearch:
                         }
                     }
                 )
-                TabRow(selectedTabIndex = tab) {
-                    Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("گفتگوها") })
-                    Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("بایگانی") })
-                    Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text("مسدود شده") })
+                TabRow(selectedTabIndex = visibleTabs.indexOfFirst { it.first == tab }.coerceAtLeast(0)) {
+                    visibleTabs.forEach { (value, label) -> Tab(selected = tab == value, onClick = { tab = value }, text = { Text(label) }) }
                 }
                 if (sync.running) {
                     val f = if (sync.total > 0) sync.done / sync.total.toFloat() else 0f

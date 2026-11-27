@@ -217,29 +217,29 @@ fun AppNav() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(vm: ListsVM, onOpen: (String, String) -> Unit, onSearch: () -> Unit, onNew: () -> Unit, onReports: () -> Unit) {
+    val app = LocalContext.current.app
+    val settings by app.settings.flow.collectAsState(initial = AppSettings())
     var tab by rememberSaveable { mutableIntStateOf(0) }
-    val items = listOf(
-        Triple("گفتگوها", Icons.Default.Forum, 0),
-        Triple("زمان‌بندی", Icons.Default.Schedule, 1),
-        Triple("مسدودی", Icons.Default.Block, 2),
-        Triple("تنظیمات", Icons.Default.Settings, 3)
-    )
-    Scaffold(
-        contentWindowInsets = NoInsets,
-        bottomBar = {
-            NavigationBar {
-                items.forEach { (label, icon, i) ->
-                    NavigationBarItem(selected = tab == i, onClick = { tab = i }, icon = { Icon(icon, label) }, label = { Text(label, maxLines = 1) })
-                }
+    var showBlocklist by rememberSaveable { mutableStateOf(false) }
+    val items = buildList {
+        add(Triple("گفتگوها", Icons.Default.Forum, 0))
+        if (settings.showScheduleNav) add(Triple("زمان‌بندی", Icons.Default.Schedule, 1))
+        add(Triple("تنظیمات", Icons.Default.Settings, 2))
+    }
+    Scaffold(contentWindowInsets = NoInsets, bottomBar = {
+        NavigationBar {
+            items.forEach { (label, icon, i) ->
+                NavigationBarItem(selected = !showBlocklist && tab == i, onClick = { tab = i; showBlocklist = false },
+                    icon = { Icon(icon, label) }, label = { Text(label, maxLines = 1) })
             }
         }
-    ) { inner ->
+    }) { inner ->
         Box(Modifier.padding(inner).consumeWindowInsets(inner)) {
-            when (tab) {
-                0 -> ConversationsScreen(vm, onOpen, onSearch, onNew)
-                1 -> ScheduledScreen()
-                2 -> BlocklistScreen()
-                else -> SettingsScreen(onReports)
+            when {
+                showBlocklist -> BlocklistScreen(onBack = { showBlocklist = false })
+                tab == 0 -> ConversationsScreen(vm, onOpen, onSearch, onNew)
+                tab == 1 && settings.showScheduleNav -> ScheduledScreen()
+                else -> SettingsScreen(onReports = onReports, onBlocklist = { showBlocklist = true })
             }
         }
     }

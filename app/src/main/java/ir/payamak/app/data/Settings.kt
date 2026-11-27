@@ -8,20 +8,46 @@ import kotlinx.coroutines.flow.map
 
 private val Context.dataStore by preferencesDataStore("settings")
 
-data class AppSettings(val font: String = "vazirmatn", val scale: Float = 1f, val theme: Int = 0)
+data class AppSettings(
+    val font: String = "vazirmatn", val scale: Float = 1f, val theme: Int = 0,
+    val design: Int = 0, val showArchiveTab: Boolean = true, val showBlockedTab: Boolean = true,
+    val showScheduleNav: Boolean = true, val showReportsNav: Boolean = true,
+    val delayedSend: Boolean = false, val primaryColor: Long = 0L, val backgroundColor: Long = 0L,
+    val cardColor: Long = 0L, val textColor: Long = 0L
+)
 
 class SettingsStore(private val ctx: Context) {
     private val FONT = stringPreferencesKey("font")
     private val SCALE = floatPreferencesKey("scale")
     private val THEME = intPreferencesKey("theme")
+    private val DESIGN = intPreferencesKey("design")
+    private val ARCHIVE = booleanPreferencesKey("show_archive")
+    private val BLOCKED = booleanPreferencesKey("show_blocked")
+    private val SCHEDULE = booleanPreferencesKey("show_schedule")
+    private val REPORTS = booleanPreferencesKey("show_reports")
+    private val DELAYED = booleanPreferencesKey("delayed_send")
+    private val PRIMARY = longPreferencesKey("custom_primary")
+    private val BACKGROUND = longPreferencesKey("custom_background")
+    private val CARD = longPreferencesKey("custom_card")
+    private val TEXT = longPreferencesKey("custom_text")
 
     val flow: Flow<AppSettings> = ctx.dataStore.data.map {
-        AppSettings(it[FONT] ?: "vazirmatn", it[SCALE] ?: 1f, it[THEME] ?: 0)
+        AppSettings(it[FONT] ?: "vazirmatn", it[SCALE] ?: 1f, it[THEME] ?: 0,
+            it[DESIGN] ?: 0, it[ARCHIVE] ?: true, it[BLOCKED] ?: true,
+            it[SCHEDULE] ?: true, it[REPORTS] ?: true, it[DELAYED] ?: false,
+            it[PRIMARY] ?: 0L, it[BACKGROUND] ?: 0L, it[CARD] ?: 0L, it[TEXT] ?: 0L)
     }
 
     suspend fun setFont(v: String) { ctx.dataStore.edit { it[FONT] = v } }
     suspend fun setScale(v: Float) { ctx.dataStore.edit { it[SCALE] = v } }
     suspend fun setTheme(v: Int) { ctx.dataStore.edit { it[THEME] = v } }
+    suspend fun setDesign(v: Int) { ctx.dataStore.edit { it[DESIGN] = v } }
+    suspend fun setArchiveTab(v: Boolean) { ctx.dataStore.edit { it[ARCHIVE] = v } }
+    suspend fun setBlockedTab(v: Boolean) { ctx.dataStore.edit { it[BLOCKED] = v } }
+    suspend fun setScheduleNav(v: Boolean) { ctx.dataStore.edit { it[SCHEDULE] = v } }
+    suspend fun setReportsNav(v: Boolean) { ctx.dataStore.edit { it[REPORTS] = v } }
+    suspend fun setDelayedSend(v: Boolean) { ctx.dataStore.edit { it[DELAYED] = v } }
+    suspend fun setColors(primary: Long, background: Long, card: Long, text: Long) { ctx.dataStore.edit { it[PRIMARY] = primary; it[BACKGROUND] = background; it[CARD] = card; it[TEXT] = text } }
 }
 
 /**

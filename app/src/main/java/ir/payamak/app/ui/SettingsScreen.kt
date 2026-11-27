@@ -27,7 +27,7 @@ import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(onReports: () -> Unit) {
+fun SettingsScreen(onReports: () -> Unit, onBlocklist: () -> Unit) {
     val ctx = LocalContext.current
     val app = ctx.app
     val s by app.settings.flow.collectAsState(initial = AppSettings())
@@ -37,7 +37,7 @@ fun SettingsScreen(onReports: () -> Unit) {
     var scale by remember(s.scale) { mutableFloatStateOf(s.scale) }
     var newTpl by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
-    var checking by remember { mutableStateOf(false) }
+    var checking by remember { mutableStateOf(false) }\n    var templatesOpen by remember { mutableStateOf(false) }
 
     fun toast(m: String) = Toast.makeText(ctx, m, Toast.LENGTH_LONG).show()
 
@@ -127,6 +127,61 @@ fun SettingsScreen(onReports: () -> Unit) {
             )
             Text("نمونه: پیامک شما با موفقیت ارسال شد.", style = MaterialTheme.typography.bodyLarge)
 
+            Text("قالب ظاهری برنامه", style = MaterialTheme.typography.titleMedium)
+            val designs = listOf("کلاسیک", "iPhone 17", "Galaxy S26", "Ocean Pro", "Rose Gold")
+            designs.forEachIndexed { i, label ->
+                Card(Modifier.fillMaxWidth().selectable(selected = s.design == i, onClick = { scope.launch { app.settings.setDesign(i) } }),
+                    colors = CardDefaults.cardColors(containerColor = if (s.design == i) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant)) {
+                    Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(selected = s.design == i, onClick = null)
+                        Text(label, Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
+                        Text("Aa ۱۲۳", color = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            }
+
+            Text("شخصی‌سازی نمایش", style = MaterialTheme.typography.titleMedium)
+            @Composable fun settingSwitch(label: String, checked: Boolean, change: (Boolean) -> Unit) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(label, Modifier.weight(1f))
+                    Switch(checked = checked, onCheckedChange = change)
+                }
+            }
+            settingSwitch("نمایش تب بایگانی در پیامک‌ها", s.showArchiveTab) { v -> scope.launch { app.settings.setArchiveTab(v) } }
+            settingSwitch("نمایش تب مسدودشده در پیامک‌ها", s.showBlockedTab) { v -> scope.launch { app.settings.setBlockedTab(v) } }
+            settingSwitch("نمایش منوی زمان‌بندی در نوار پایین", s.showScheduleNav) { v -> scope.launch { app.settings.setScheduleNav(v) } }
+            settingSwitch("نمایش گزارش‌ها در تنظیمات", s.showReportsNav) { v -> scope.launch { app.settings.setReportsNav(v) } }
+            settingSwitch("تأخیر ۵ ثانیه‌ای پیش از ارسال پیامک", s.delayedSend) { v -> scope.launch { app.settings.setDelayedSend(v) } }
+
+            OutlinedCard(onClick = onBlocklist, modifier = Modifier.fillMaxWidth()) {
+                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Block, null); Spacer(Modifier.width(12.dp))
+                    Text("مدیریت مسدودسازی و شماره‌های مسدود", Modifier.weight(1f))
+                    Icon(Icons.Default.ChevronLeft, null)
+                }
+            }
+
+            Text("رنگ‌بندی", style = MaterialTheme.typography.titleMedium)
+            Text("رنگ اصلی، پس‌زمینه، کارت‌ها و نوشته‌ها را جداگانه تنظیم کنید.", style = MaterialTheme.typography.bodySmall)
+            val swatches = listOf(0xFF00796B, 0xFF245BDB, 0xFF1677C8, 0xFFB43D70, 0xFF9A5B12, 0xFF30343B, 0xFF6750A4)
+            @Composable fun colorRow(label: String, selected: Long, update: (Long) -> Unit) {
+                Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Text(label, style = MaterialTheme.typography.labelLarge)
+                    Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                        swatches.forEach { color ->
+                            Surface(Modifier.size(32.dp).selectable(selected = selected == color, onClick = { update(color) }),
+                                color = androidx.compose.ui.graphics.Color(color), shape = MaterialTheme.shapes.large,
+                                border = if (selected == color) androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.onSurface) else null) {}
+                        }
+                        TextButton(onClick = { update(0L) }) { Text("پیش‌فرض") }
+                    }
+                }
+            }
+            colorRow("رنگ اصلی", s.primaryColor) { v -> scope.launch { app.settings.setColors(v, s.backgroundColor, s.cardColor, s.textColor) } }
+            colorRow("پس‌زمینه", s.backgroundColor) { v -> scope.launch { app.settings.setColors(s.primaryColor, v, s.cardColor, s.textColor) } }
+            colorRow("کارت‌ها", s.cardColor) { v -> scope.launch { app.settings.setColors(s.primaryColor, s.backgroundColor, v, s.textColor) } }
+            colorRow("نوشته‌ها", s.textColor) { v -> scope.launch { app.settings.setColors(s.primaryColor, s.backgroundColor, s.cardColor, v) } }
+
             Text("پوسته", style = MaterialTheme.typography.titleMedium)
             SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                 listOf("خودکار", "روشن", "تاریک").forEachIndexed { i, label ->
@@ -135,21 +190,26 @@ fun SettingsScreen(onReports: () -> Unit) {
             }
 
             HorizontalDivider()
-            Text("پیام‌های آماده", style = MaterialTheme.typography.titleMedium)
-            Text("با دکمه‌ی ⚡ در گفتگو می‌توانید این متن‌ها را سریع وارد کنید.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            templates.forEach { t ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(t.text, Modifier.weight(1f))
-                    IconButton(onClick = { scope.launch { app.db.extraDao().deleteTemplate(t.id) } }) { Icon(Icons.Default.Delete, "حذف") }
+            OutlinedCard(onClick = { templatesOpen = true }, modifier = Modifier.fillMaxWidth()) {
+                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.FlashOn, null); Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) { Text("پیام‌های آماده", style = MaterialTheme.typography.titleSmall); Text("${templates.size} پیام ذخیره‌شده", style = MaterialTheme.typography.bodySmall) }
+                    Icon(Icons.Default.ChevronLeft, null)
                 }
             }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(newTpl, { newTpl = it }, Modifier.weight(1f), singleLine = true, label = { Text("متن جدید") })
-                FilledIconButton(onClick = {
-                    val t = newTpl.trim()
-                    if (t.isNotEmpty()) { scope.launch { app.db.extraDao().insertTemplate(Template(text = t)) }; newTpl = "" }
-                }) { Icon(Icons.Default.Add, "افزودن") }
-            }
+            if (templatesOpen) AlertDialog(
+                onDismissRequest = { templatesOpen = false },
+                title = { Text("مدیریت پیام‌های آماده") },
+                text = { Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    templates.forEach { t -> Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(t.text, Modifier.weight(1f))
+                        IconButton(onClick = { scope.launch { app.db.extraDao().deleteTemplate(t.id) } }) { Icon(Icons.Default.Delete, "حذف") }
+                    } }
+                    OutlinedTextField(newTpl, { newTpl = it }, Modifier.fillMaxWidth(), minLines = 3, maxLines = 6, label = { Text("متن پیام جدید") })
+                    Button(onClick = { val value = newTpl.trim(); if (value.isNotEmpty()) { scope.launch { app.db.extraDao().insertTemplate(Template(text = value)) }; newTpl = "" } }, enabled = newTpl.isNotBlank()) { Icon(Icons.Default.Add, null); Text("افزودن پیام") }
+                } },
+                confirmButton = { TextButton(onClick = { templatesOpen = false }) { Text("بستن") } }
+            )
 
             HorizontalDivider()
             Text("پشتیبان‌گیری", style = MaterialTheme.typography.titleMedium)
